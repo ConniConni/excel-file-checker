@@ -14,6 +14,7 @@ class TestConfigLoader:
 
         assert loader.target_dir == "./test_input"
         assert loader.search_keyword == "テスト"
+        assert loader.target_sheet == "Sheet1"
         assert loader.target_cells == ["A1", "B2", "C3"]
         assert loader.image_check_cells == ["D1", "E2"]
         assert loader.output_filename == "test_output.txt"

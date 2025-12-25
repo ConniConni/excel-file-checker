@@ -94,13 +94,19 @@ class ExcelFileChecker:
             処理結果の辞書
             形式: {"filename": str, "cell_values": List[Any], "image_results": List[str]}
         """
-        # セル値を抽出
+        # セル値を抽出（シート名を指定）
         extractor = CellExtractor(file_path)
-        cell_values = extractor.extract_cells(self.config.target_cells)
+        cell_values = extractor.extract_cells(
+            self.config.target_cells,
+            sheet_name=self.config.target_sheet
+        )
 
-        # 画像判定を実行
+        # 画像判定を実行（シート名を指定）
         checker = ImageChecker(file_path)
-        image_results = checker.check_images(self.config.image_check_cells)
+        image_results = checker.check_images(
+            self.config.image_check_cells,
+            sheet_name=self.config.target_sheet
+        )
 
         return {
             "filename": str(file_path.name),

@@ -36,11 +36,12 @@ class ImageChecker:
         self.file_path = file_path
         self.file_extension = file_path.suffix.lower()
 
-    def check_images(self, cell_list: List[str]) -> List[str]:
+    def check_images(self, cell_list: List[str], sheet_name: str = None) -> List[str]:
         """指定されたセルに画像が存在するかを判定
 
         Args:
             cell_list: セル座標のリスト（例: ["D1", "E1"]）
+            sheet_name: シート名（Excelファイルのみ有効、指定しない場合は最初のシート）
 
         Returns:
             判定結果のリスト
@@ -56,13 +57,14 @@ class ImageChecker:
         if self.file_extension not in self.SUPPORTED_EXTENSIONS:
             return ["-"] * len(cell_list)
 
-        return self._check_images_in_excel(cell_list)
+        return self._check_images_in_excel(cell_list, sheet_name)
 
-    def _check_images_in_excel(self, cell_list: List[str]) -> List[str]:
+    def _check_images_in_excel(self, cell_list: List[str], sheet_name: str = None) -> List[str]:
         """Excelファイル内の画像を判定
 
         Args:
             cell_list: セル座標のリスト
+            sheet_name: シート名（指定しない場合は最初のシート）
 
         Returns:
             判定結果のリスト（"○" or "×"）
@@ -70,7 +72,12 @@ class ImageChecker:
         try:
             # openpyxlでExcelファイルを開く
             workbook = openpyxl.load_workbook(self.file_path)
-            sheet = workbook.active
+
+            # シート名が指定されている場合はそのシートを、指定がない場合は最初のシートを使用
+            if sheet_name:
+                sheet = workbook[sheet_name]
+            else:
+                sheet = workbook.worksheets[0]
 
             # シート内の全画像を取得
             images = sheet._images

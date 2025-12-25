@@ -118,3 +118,33 @@ class TestCellExtractor:
 
         assert isinstance(values, list)
         assert len(values) == 2
+
+    def test_シート名を指定してセル値を抽出できる(self):
+        """シート名を指定して特定シートのセル値を抽出できることを確認"""
+        file_path = Path(__file__).parent / "fixtures" / "multi_sheet.xlsx"
+        extractor = CellExtractor(file_path)
+
+        # Sheet1から抽出
+        values_sheet1 = extractor.extract_cells(["A1", "B1", "C1"], sheet_name="Sheet1")
+        assert values_sheet1[0] == "Sheet1_A1"
+        assert values_sheet1[1] == "Sheet1_B1"
+        assert values_sheet1[2] == "Sheet1_C1"
+
+        # Sheet2から抽出
+        values_sheet2 = extractor.extract_cells(["A1", "B1", "C1"], sheet_name="Sheet2")
+        assert values_sheet2[0] == "Sheet2_A1"
+        assert values_sheet2[1] == "Sheet2_B1"
+        assert values_sheet2[2] == "Sheet2_C1"
+
+    def test_シート名を指定しない場合は最初のシートを使用(self):
+        """シート名を指定しない場合、最初のシート（インデックス0）を使用することを確認"""
+        file_path = Path(__file__).parent / "fixtures" / "multi_sheet.xlsx"
+        extractor = CellExtractor(file_path)
+
+        # シート名を指定しない
+        values = extractor.extract_cells(["A1", "B1", "C1"])
+
+        # 最初のシート（Sheet1）のデータが取得される
+        assert values[0] == "Sheet1_A1"
+        assert values[1] == "Sheet1_B1"
+        assert values[2] == "Sheet1_C1"

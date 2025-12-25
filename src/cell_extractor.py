@@ -43,11 +43,12 @@ class CellExtractor:
                 f"エラー: サポートされていないファイル形式です: {self.file_extension}"
             )
 
-    def extract_cells(self, cell_list: List[str]) -> List[Any]:
+    def extract_cells(self, cell_list: List[str], sheet_name: str = None) -> List[Any]:
         """指定されたセルの値を抽出
 
         Args:
             cell_list: セル座標のリスト（例: ["A1", "B2", "C3"]）
+            sheet_name: シート名（Excelファイルのみ有効、指定しない場合は最初のシート）
 
         Returns:
             抽出されたセル値のリスト
@@ -55,25 +56,31 @@ class CellExtractor:
         if self.file_extension == '.csv':
             return self._extract_from_csv(cell_list)
         else:
-            return self._extract_from_excel(cell_list)
+            return self._extract_from_excel(cell_list, sheet_name)
 
-    def _extract_from_excel(self, cell_list: List[str]) -> List[Any]:
+    def _extract_from_excel(self, cell_list: List[str], sheet_name: str = None) -> List[Any]:
         """Excelファイルからセル値を抽出
 
         Args:
             cell_list: セル座標のリスト
+            sheet_name: シート名（指定しない場合は最初のシート）
 
         Returns:
             抽出されたセル値のリスト
         """
         # .xls形式の場合はpandasで読み込む（openpyxlは.xlsをサポートしない）
         if self.file_extension == '.xls':
-            return self._extract_from_excel_with_pandas(cell_list)
+            return self._extract_from_excel_with_pandas(cell_list, sheet_name)
 
         try:
             # openpyxlでExcelファイルを開く（.xlsx形式）
             workbook = openpyxl.load_workbook(self.file_path, data_only=True)
-            sheet = workbook.active
+
+            # シート名が指定されている場合はそのシートを、指定がない場合は最初のシートを使用
+            if sheet_name:
+                sheet = workbook[sheet_name]
+            else:
+                sheet = workbook.worksheets[0]
 
             values = []
             for cell_address in cell_list:
@@ -93,18 +100,21 @@ class CellExtractor:
                 f"エラー: Excelファイルの読み込みに失敗しました: {self.file_path} - {str(e)}"
             )
 
-    def _extract_from_excel_with_pandas(self, cell_list: List[str]) -> List[Any]:
+    def _extract_from_excel_with_pandas(self, cell_list: List[str], sheet_name: str = None) -> List[Any]:
         """Excelファイル(.xls)からpandasでセル値を抽出
 
         Args:
             cell_list: セル座標のリスト
+            sheet_name: シート名（指定しない場合は最初のシート）
 
         Returns:
             抽出されたセル値のリスト
         """
         try:
             # pandasでExcelファイルを読み込む（ヘッダーなし）
-            df = pd.read_excel(self.file_path, header=None)
+            # sheet_nameが指定されている場合はそのシートを、指定がない場合は最初のシート(0)を使用
+            sheet_param = sheet_name if sheet_name else 0
+            df = pd.read_excel(self.file_path, sheet_name=sheet_param, header=None)
 
             values = []
             for cell_address in cell_list:

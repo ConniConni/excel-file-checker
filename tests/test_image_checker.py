@@ -102,3 +102,27 @@ class TestImageChecker:
         results = checker.check_images([])
 
         assert results == []
+
+    def test_シート名を指定して画像判定できる(self):
+        """シート名を指定して特定シートの画像判定ができることを確認"""
+        file_path = Path(__file__).parent / "fixtures" / "multi_sheet_with_images.xlsx"
+        checker = ImageChecker(file_path)
+
+        # Sheet1は画像なし
+        results_sheet1 = checker.check_images(["D1"], sheet_name="Sheet1")
+        assert results_sheet1[0] == "×"
+
+        # Sheet2は画像あり
+        results_sheet2 = checker.check_images(["D1"], sheet_name="Sheet2")
+        assert results_sheet2[0] == "○"
+
+    def test_シート名を指定しない場合は最初のシートを使用(self):
+        """シート名を指定しない場合、最初のシート（インデックス0）を使用することを確認"""
+        file_path = Path(__file__).parent / "fixtures" / "multi_sheet_with_images.xlsx"
+        checker = ImageChecker(file_path)
+
+        # シート名を指定しない（最初のシートSheet1が使用される）
+        results = checker.check_images(["D1"])
+
+        # Sheet1には画像がないので×
+        assert results[0] == "×"

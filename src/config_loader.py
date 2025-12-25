@@ -13,6 +13,7 @@ class ConfigLoader:
     Attributes:
         target_dir (str): 探索対象のルートディレクトリ
         search_keyword (str): ファイル名に含まれるキーワード
+        target_sheet (str): 対象シート名（Excelファイル用）
         target_cells (List[str]): 抽出対象のセルリスト
         image_check_cells (List[str]): 画像判定対象のセルリスト
         output_filename (str): 出力ファイル名
@@ -57,6 +58,9 @@ class ConfigLoader:
         self.target_dir = config.get('SETTINGS', 'target_dir')
         self.search_keyword = config.get('SETTINGS', 'search_keyword')
         self.output_filename = config.get('SETTINGS', 'output_filename')
+
+        # target_sheetはオプション（指定がない場合はNone）
+        self.target_sheet = config.get('SETTINGS', 'target_sheet', fallback=None)
 
         # カンマ区切りのリストをパースして空白を除去
         self.target_cells = self._parse_cell_list(
