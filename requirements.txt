@@ -1,0 +1,10 @@
+# Excel操作用ライブラリ
+pandas>=2.0.0
+openpyxl>=3.1.0
+
+# 設定ファイル読み込み（Python標準ライブラリのためインストール不要）
+# configparser
+
+# テストフレームワーク
+pytest>=7.4.0
+pytest-cov>=4.1.0
