@@ -77,7 +77,11 @@ class ExcelFileChecker:
             target_cells=self.config.target_cells,
             image_check_cells=self.config.image_check_cells
         )
-        formatted_output = formatter.format_results(results)
+        formatted_output = formatter.format_results(
+            results,
+            root_dir=Path(self.config.target_dir),
+            file_paths=matched_files
+        )
 
         # 結果をファイルに保存
         self._save_results(formatted_output)

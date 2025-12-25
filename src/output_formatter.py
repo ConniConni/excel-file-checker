@@ -2,7 +2,8 @@
 
 ファイル抽出結果を視認性の高いフォーマットで整形する。
 """
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
+from pathlib import Path
 import unicodedata
 
 
@@ -24,12 +25,19 @@ class OutputFormatter:
         self.target_cells = target_cells
         self.image_check_cells = image_check_cells
 
-    def format_results(self, results: List[Dict[str, Any]]) -> str:
+    def format_results(
+        self,
+        results: List[Dict[str, Any]],
+        root_dir: Optional[Path] = None,
+        file_paths: Optional[List[Path]] = None
+    ) -> str:
         """抽出結果を整形して文字列で返す
 
         Args:
             results: 各ファイルの抽出結果のリスト
                 形式: [{"filename": str, "cell_values": List[Any], "image_results": List[str]}, ...]
+            root_dir: ルートディレクトリ（サマリ用、オプション）
+            file_paths: ファイルパスのリスト（サマリ用、オプション）
 
         Returns:
             整形された結果文字列（カンマ位置が垂直に揃う）
@@ -49,7 +57,15 @@ class OutputFormatter:
             formatted_row = self._format_row_with_padding(result, column_widths)
             output_lines.append(formatted_row)
 
-        return "\n".join(output_lines) + "\n"
+        # 基本出力
+        output = "\n".join(output_lines) + "\n"
+
+        # サマリを追加（root_dirとfile_pathsが指定されている場合）
+        if root_dir is not None and file_paths is not None:
+            summary = self._generate_summary(root_dir, file_paths)
+            output += "\n\n" + summary
+
+        return output
 
     def _generate_header(self) -> str:
         """ヘッダー行を生成（パディングなし）
@@ -222,3 +238,95 @@ class OutputFormatter:
             padding_needed = 0
 
         return text + " " * padding_needed
+
+    def _generate_summary(self, root_dir: Path, file_paths: List[Path]) -> str:
+        """サマリセクションを生成
+
+        Args:
+            root_dir: ルートディレクトリ
+            file_paths: ファイルパスのリスト
+
+        Returns:
+            サマリ文字列
+        """
+        summary_lines = []
+        summary_lines.append("=== サマリ ===")
+        summary_lines.append(f"出力対象ファイル件数: {len(file_paths)}件")
+        summary_lines.append("")
+
+        # ツリー構造を生成
+        tree = self._generate_tree(root_dir, file_paths)
+        summary_lines.append(tree)
+
+        summary_lines.append("=============")
+
+        return "\n".join(summary_lines)
+
+    def _generate_tree(self, root_dir: Path, file_paths: List[Path]) -> str:
+        """ファイルツリー構造を生成
+
+        Args:
+            root_dir: ルートディレクトリ
+            file_paths: ファイルパスのリスト
+
+        Returns:
+            ツリー構造の文字列
+        """
+        # ファイルパスをソート
+        sorted_paths = sorted(file_paths)
+
+        # ルートディレクトリを表示
+        tree_lines = [f"{root_dir}/"]
+
+        # ディレクトリ構造を構築
+        # 各ファイルの相対パスを取得
+        file_tree = {}
+        for file_path in sorted_paths:
+            try:
+                rel_path = file_path.relative_to(root_dir)
+                parts = rel_path.parts
+                current = file_tree
+                for part in parts:
+                    if part not in current:
+                        current[part] = {}
+                    current = current[part]
+            except ValueError:
+                # relative_toが失敗した場合（異なるドライブなど）
+                # 絶対パスをそのまま使用
+                parts = file_path.parts
+                current = file_tree
+                for part in parts:
+                    if part not in current:
+                        current[part] = {}
+                    current = current[part]
+
+        # ツリーを再帰的に構築
+        def build_tree(tree_dict: Dict, prefix: str = "", is_last: bool = True) -> List[str]:
+            """ツリー構造を再帰的に構築"""
+            lines = []
+            items = sorted(tree_dict.keys())
+
+            for i, item in enumerate(items):
+                is_last_item = (i == len(items) - 1)
+                connector = "└── " if is_last_item else "├── "
+
+                # ディレクトリかファイルかを判定
+                if tree_dict[item]:  # 子要素がある場合はディレクトリ
+                    lines.append(f"{prefix}{connector}{item}/")
+                    # 次のレベルのプレフィックスを設定
+                    if is_last_item:
+                        next_prefix = prefix + "    "
+                    else:
+                        next_prefix = prefix + "│   "
+                    # 再帰的に子要素を処理
+                    child_lines = build_tree(tree_dict[item], next_prefix, is_last_item)
+                    lines.extend(child_lines)
+                else:  # 子要素がない場合はファイル
+                    lines.append(f"{prefix}{connector}{item}")
+
+            return lines
+
+        tree_content = build_tree(file_tree)
+        tree_lines.extend(tree_content)
+
+        return "\n".join(tree_lines)

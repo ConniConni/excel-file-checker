@@ -206,3 +206,125 @@ class TestOutputFormatter:
         # 全ての行が同じ構造を持つことを確認（カンマの数が同じ）
         comma_counts = [line.count(",") for line in lines]
         assert len(set(comma_counts)) == 1
+
+    def test_サマリ部分が正しく生成される(self):
+        """サマリ部分が正しいフォーマットで生成されることを確認"""
+        formatter = OutputFormatter(
+            target_cells=["A1", "B1"],
+            image_check_cells=["D1"]
+        )
+
+        results = [
+            {
+                "filename": "test1.xlsx",
+                "cell_values": ["A", "B"],
+                "image_results": ["○"]
+            },
+            {
+                "filename": "test2.xlsx",
+                "cell_values": ["C", "D"],
+                "image_results": ["×"]
+            }
+        ]
+
+        root_dir = Path("/data")
+        file_paths = [
+            Path("/data/test1.xlsx"),
+            Path("/data/test2.xlsx")
+        ]
+
+        formatted = formatter.format_results(results, root_dir=root_dir, file_paths=file_paths)
+
+        # サマリセクションが含まれることを確認
+        assert "=== サマリ ===" in formatted
+        assert "=============" in formatted
+        assert "出力対象ファイル件数: 2件" in formatted
+
+    def test_サマリのツリー構造が正しく生成される(self):
+        """サマリのツリー構造が正しく生成されることを確認"""
+        formatter = OutputFormatter(
+            target_cells=["A1"],
+            image_check_cells=[]
+        )
+
+        results = [
+            {"filename": "file1.xlsx", "cell_values": ["A"], "image_results": []},
+            {"filename": "file2.xlsx", "cell_values": ["B"], "image_results": []},
+            {"filename": "file3.xlsx", "cell_values": ["C"], "image_results": []}
+        ]
+
+        root_dir = Path("/data")
+        file_paths = [
+            Path("/data/file1.xlsx"),
+            Path("/data/subfolder/file2.xlsx"),
+            Path("/data/file3.xlsx")
+        ]
+
+        formatted = formatter.format_results(results, root_dir=root_dir, file_paths=file_paths)
+
+        # ツリー構造の要素が含まれることを確認
+        assert "/data/" in formatted or "/data" in formatted
+        assert "file1.xlsx" in formatted
+        assert "file2.xlsx" in formatted
+        assert "file3.xlsx" in formatted
+        assert "subfolder" in formatted
+        # ツリー記号が含まれることを確認
+        assert "├──" in formatted or "└──" in formatted
+
+    def test_サマリのファイルがアルファベット順にソートされる(self):
+        """サマリのファイルがアルファベット順にソートされることを確認"""
+        formatter = OutputFormatter(
+            target_cells=["A1"],
+            image_check_cells=[]
+        )
+
+        results = [
+            {"filename": "c.xlsx", "cell_values": ["A"], "image_results": []},
+            {"filename": "a.xlsx", "cell_values": ["B"], "image_results": []},
+            {"filename": "b.xlsx", "cell_values": ["C"], "image_results": []}
+        ]
+
+        root_dir = Path("/data")
+        file_paths = [
+            Path("/data/c.xlsx"),
+            Path("/data/a.xlsx"),
+            Path("/data/b.xlsx")
+        ]
+
+        formatted = formatter.format_results(results, root_dir=root_dir, file_paths=file_paths)
+
+        # サマリ部分を抽出
+        summary_start = formatted.index("=== サマリ ===")
+        summary_section = formatted[summary_start:]
+
+        # a.xlsx, b.xlsx, c.xlsx の順に出現することを確認
+        a_pos = summary_section.index("a.xlsx")
+        b_pos = summary_section.index("b.xlsx")
+        c_pos = summary_section.index("c.xlsx")
+
+        assert a_pos < b_pos < c_pos
+
+    def test_サマリなしでも既存機能が動作する(self):
+        """root_dirとfile_pathsを指定しない場合、サマリなしで既存機能が動作することを確認"""
+        formatter = OutputFormatter(
+            target_cells=["A1", "B1"],
+            image_check_cells=["D1"]
+        )
+
+        results = [
+            {
+                "filename": "test.xlsx",
+                "cell_values": ["A", "B"],
+                "image_results": ["○"]
+            }
+        ]
+
+        # サマリ情報を渡さない
+        formatted = formatter.format_results(results)
+
+        # 通常の出力は含まれる
+        assert "Filename" in formatted
+        assert "test.xlsx" in formatted
+
+        # サマリは含まれない
+        assert "=== サマリ ===" not in formatted
