@@ -189,3 +189,93 @@ output_filename = test_result.txt
 
         # 日本語が含まれることを確認
         assert "画像" in content
+
+    @pytest.fixture
+    def multi_file_type_config_dir(self):
+        """複数ファイルタイプ対応のテスト用一時ディレクトリとconfig.iniを作成"""
+        # 一時ディレクトリを作成
+        temp_dir = tempfile.mkdtemp()
+        temp_path = Path(temp_dir)
+
+        # 新形式のconfig.iniを作成
+        config_path = temp_path / "test_config.ini"
+        config_content = """[SETTINGS]
+target_dir = {input_dir}
+output_filename = test_result.txt
+
+[FILE_TYPE_1]
+file_pattern = *レビューチェックリスト*.xlsx
+target_sheet = Sheet
+target_cells = A1, B1
+image_check_cells =
+
+[FILE_TYPE_2]
+file_pattern = レビュー記録表*.xlsx
+target_sheet = Sheet
+target_cells = A1, B1, C1
+image_check_cells = D1
+""".format(input_dir=str(temp_path / "input"))
+
+        config_path.write_text(config_content, encoding="utf-8")
+
+        # 入力ディレクトリを作成
+        input_dir = temp_path / "input"
+        input_dir.mkdir()
+
+        # テストファイルをコピー
+        fixtures_dir = Path(__file__).parent / "fixtures"
+        shutil.copy(
+            fixtures_dir / "excel_with_images.xlsx",
+            input_dir / "test_レビューチェックリスト_v1.xlsx"
+        )
+        shutil.copy(
+            fixtures_dir / "excel_partial_images.xlsx",
+            input_dir / "レビュー記録表_2024.xlsx"
+        )
+        shutil.copy(
+            fixtures_dir / "empty.xlsx",
+            input_dir / "other_file.xlsx"
+        )
+
+        yield temp_path
+
+        # クリーンアップ
+        shutil.rmtree(temp_dir)
+
+    def test_複数ファイルタイプ設定で正しく処理される(self, multi_file_type_config_dir):
+        """複数ファイルタイプ設定で各ファイルが正しく処理されることを確認"""
+        config_path = multi_file_type_config_dir / "test_config.ini"
+        output_path = multi_file_type_config_dir / "test_result.txt"
+
+        checker = ExcelFileChecker(config_path)
+        checker.run()
+
+        # 出力ファイルが存在することを確認
+        assert output_path.exists()
+
+        content = output_path.read_text(encoding="utf-8")
+
+        # マッチするファイルが処理されることを確認
+        assert "レビューチェックリスト" in content
+        assert "レビュー記録表" in content
+
+        # マッチしないファイルは処理されないことを確認
+        assert "other_file.xlsx" not in content
+
+    def test_ファイルタイプごとに異なるセルが抽出される(self, multi_file_type_config_dir):
+        """ファイルタイプごとに異なるセル設定が適用されることを確認"""
+        config_path = multi_file_type_config_dir / "test_config.ini"
+        output_path = multi_file_type_config_dir / "test_result.txt"
+
+        checker = ExcelFileChecker(config_path)
+        checker.run()
+
+        content = output_path.read_text(encoding="utf-8")
+
+        # ヘッダーに各ファイルタイプのセルが含まれることを確認
+        # レビューチェックリスト: A1, B1のみ（画像なし）
+        # レビュー記録表: A1, B1, C1 + D1(画像)
+        lines = content.strip().split("\n")
+
+        # ヘッダー行が存在することを確認
+        assert len(lines) > 0

@@ -68,3 +68,50 @@ class TestConfigLoader:
 
         for cell in loader.image_check_cells:
             assert cell == cell.strip()
+
+    def test_複数ファイルタイプの設定ファイルの読み込み(self):
+        """複数のファイルタイプを持つ設定ファイルが正しく読み込めることを確認"""
+        config_path = Path(__file__).parent / "fixtures" / "multi_file_type_config.ini"
+        loader = ConfigLoader(config_path)
+
+        # 基本設定の確認
+        assert loader.target_dir == "./test_input"
+        assert loader.output_filename == "test_output.txt"
+
+        # ファイルタイプの数を確認
+        assert len(loader.file_types) == 2
+
+        # ファイルタイプ1の確認
+        file_type_1 = loader.file_types[0]
+        assert file_type_1["file_pattern"] == "*0_レビューチェックリスト*.xlsx"
+        assert file_type_1["target_sheet"] == "sheet1"
+        assert file_type_1["target_cells"] == ["E4", "E5", "E6", "N6", "M10", "M11", "M15", "M16"]
+        assert file_type_1["image_check_cells"] == []
+
+        # ファイルタイプ2の確認
+        file_type_2 = loader.file_types[1]
+        assert file_type_2["file_pattern"] == "レビュー記録表(社*.xlsx"
+        assert file_type_2["target_sheet"] == "sheet1"
+        assert file_type_2["target_cells"] == ["AE2", "AE4", "AE5", "AE6", "AE7", "AE8", "AB17"]
+        assert file_type_2["image_check_cells"] == ["BY3"]
+
+    def test_ファイル名パターンでファイルタイプを取得できる(self):
+        """ファイル名からマッチするファイルタイプ設定を取得できることを確認"""
+        config_path = Path(__file__).parent / "fixtures" / "multi_file_type_config.ini"
+        loader = ConfigLoader(config_path)
+
+        # レビューチェックリストに対応するファイル名でテスト
+        file_type = loader.get_file_type_config("test_0_レビューチェックリスト_v1.xlsx")
+        assert file_type is not None
+        assert file_type["file_pattern"] == "*0_レビューチェックリスト*.xlsx"
+        assert file_type["target_sheet"] == "sheet1"
+
+        # レビュー記録表に対応するファイル名でテスト
+        file_type = loader.get_file_type_config("レビュー記録表(社内).xlsx")
+        assert file_type is not None
+        assert file_type["file_pattern"] == "レビュー記録表(社*.xlsx"
+        assert file_type["target_sheet"] == "sheet1"
+
+        # マッチしないファイル名でテスト
+        file_type = loader.get_file_type_config("other_file.xlsx")
+        assert file_type is None
