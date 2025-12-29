@@ -102,6 +102,20 @@ class ConfigLoader:
                 config.get(section, 'target_cells')
             )
 
+            # cell_labels はオプション（指定がない場合はセル番号を使用）
+            cell_labels_str = config.get(section, 'cell_labels', fallback='')
+            if cell_labels_str.strip():
+                file_type_config['cell_labels'] = self._parse_cell_list(cell_labels_str)
+                # cell_labelsの数とtarget_cellsの数が一致することを確認
+                if len(file_type_config['cell_labels']) != len(file_type_config['target_cells']):
+                    raise ValueError(
+                        f"エラー: セクション '{section}' のcell_labelsの数({len(file_type_config['cell_labels'])})と"
+                        f"target_cellsの数({len(file_type_config['target_cells'])})が一致しません"
+                    )
+            else:
+                # cell_labelsが指定されていない場合はセル番号を使用
+                file_type_config['cell_labels'] = file_type_config['target_cells']
+
             # image_check_cells はオプション（空文字列の場合は空リスト）
             image_check_cells_str = config.get(section, 'image_check_cells', fallback='')
             if image_check_cells_str.strip():

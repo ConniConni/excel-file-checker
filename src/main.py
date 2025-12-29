@@ -11,6 +11,7 @@ from src.file_searcher import FileSearcher
 from src.cell_extractor import CellExtractor
 from src.image_checker import ImageChecker
 from src.output_formatter import OutputFormatter
+from src.review_validator import ReviewValidator
 
 
 class ExcelFileChecker:
@@ -58,6 +59,7 @@ class ExcelFileChecker:
             all_files = self._search_all_excel_files()
             matched_files = []
             results = []
+            validator = ReviewValidator()
 
             for file_path in all_files:
                 # ファイル名にマッチする設定を取得
@@ -66,8 +68,15 @@ class ExcelFileChecker:
                 if file_type_config:
                     try:
                         result = self._process_file_with_config(file_path, file_type_config)
+                        result["file_path"] = file_path
                         results.append(result)
                         matched_files.append(file_path)
+
+                        # ファイルタイプを判定してバリデーターに追加
+                        file_type = self._determine_file_type(file_path.name)
+                        if file_type:
+                            validator.add_file(result, file_type)
+
                         self._log_info(f"処理: {file_path.name}")
                     except Exception as e:
                         self._log_error(f"ファイル処理失敗: {file_path.name} - {str(e)}")
@@ -75,11 +84,13 @@ class ExcelFileChecker:
 
             self._log_info(f"発見: {len(matched_files)}件のファイル")
 
-            # 結果を整形（新形式用）
-            formatted_output = self._format_multi_file_type_results(
-                results,
-                root_dir=Path(self.config.target_dir),
-                file_paths=matched_files
+            # ペアリングと検証を実行
+            validation_results = validator.validate_all()
+
+            # 結果を整形（新形式用・検証結果付き）
+            formatted_output = self._format_validation_results(
+                validation_results,
+                root_dir=Path(self.config.target_dir)
             )
         else:
             # 旧形式: search_keywordでファイルを探索
@@ -195,7 +206,8 @@ class ExcelFileChecker:
             "cell_values": cell_values,
             "image_results": image_results,
             "target_cells": file_type_config['target_cells'],
-            "image_check_cells": file_type_config['image_check_cells']
+            "image_check_cells": file_type_config['image_check_cells'],
+            "cell_labels": file_type_config['cell_labels']
         }
 
     def _format_multi_file_type_results(
@@ -251,6 +263,192 @@ class ExcelFileChecker:
             output_lines.append("\t".join(data_cols))
 
         return "\n".join(output_lines)
+
+    def _determine_file_type(self, filename: str) -> str:
+        """ファイル名からファイルタイプを判定
+
+        Args:
+            filename: ファイル名
+
+        Returns:
+            "checklist", "record", または None
+        """
+        if "レビューチェックリスト" in filename or "checklist" in filename.lower():
+            return "checklist"
+        elif "レビュー記録表" in filename or "記録表" in filename:
+            return "record"
+        return None
+
+    def _format_validation_results(
+        self,
+        validation_results: List[Dict[str, Any]],
+        root_dir: Path
+    ) -> str:
+        """検証結果を詳細検証表形式で整形
+
+        Args:
+            validation_results: 検証結果のリスト
+            root_dir: ルートディレクトリ
+
+        Returns:
+            整形された結果文字列
+        """
+        if not validation_results:
+            return "処理対象のファイルが見つかりませんでした。"
+
+        output_lines = []
+
+        # ヘッダー行を生成
+        headers = [
+            "Filename", "Type", "Path", "プロジェクト名", "日付",
+            "担当者", "承認者", "捺印", "ペア", "一致状況"
+        ]
+        output_lines.append("\t".join(headers))
+
+        # 各ペアの結果を出力
+        for result in validation_results:
+            project_name = result["project_name"]
+            checklist = result["checklist"]
+            record = result["record"]
+            validation = result["validation"]
+
+            # チェックリスト行
+            if checklist:
+                checklist_row = self._format_file_row(
+                    checklist, "チェックリスト", root_dir,
+                    validation, project_name
+                )
+                output_lines.append(checklist_row)
+
+            # 記録表行
+            if record:
+                record_row = self._format_file_row(
+                    record, "記録表", root_dir,
+                    validation, project_name
+                )
+                output_lines.append(record_row)
+
+        # サマリを追加
+        summary = self._generate_summary(validation_results)
+        output_lines.append("")
+        output_lines.append("【サマリ】")
+        output_lines.extend(summary)
+
+        return "\n".join(output_lines)
+
+    def _format_file_row(
+        self,
+        file_data: Dict[str, Any],
+        file_type: str,
+        root_dir: Path,
+        validation: Dict[str, Any],
+        project_name: str
+    ) -> str:
+        """ファイルデータを行形式に整形
+
+        Args:
+            file_data: ファイルデータ
+            file_type: ファイルタイプ
+            root_dir: ルートディレクトリ
+            validation: 検証結果
+            project_name: プロジェクト名
+
+        Returns:
+            タブ区切りの行文字列
+        """
+        filename = file_data.get("filename", "")
+        file_path = file_data.get("file_path", Path(""))
+        cell_labels = file_data.get("cell_labels", [])
+        cell_values = file_data.get("cell_values", [])
+
+        # 相対パスを取得
+        try:
+            relative_path = file_path.relative_to(root_dir) if file_path else Path("")
+            path_str = str(relative_path.parent) if relative_path.parent != Path(".") else "."
+        except (ValueError, AttributeError):
+            path_str = "."
+
+        # ラベルから値を取得するヘルパー関数
+        def get_value(label):
+            if label in cell_labels:
+                index = cell_labels.index(label)
+                if index < len(cell_values):
+                    return str(cell_values[index]) if cell_values[index] is not None else ""
+            return ""
+
+        # 各列の値を取得
+        date_val = get_value("日付") if file_type == "チェックリスト" else get_value("承認日")
+        reviewer_val = get_value("担当者") if file_type == "チェックリスト" else get_value("レビュアー")
+        approver_val = get_value("承認者") if file_type == "チェックリスト" else ""
+
+        # 捺印の状態
+        has_stamp = validation.get("has_stamp")
+        if file_type == "チェックリスト":
+            stamp_str = "-"
+        else:
+            stamp_str = "○" if has_stamp else "×" if has_stamp is False else "-"
+
+        # ペアの状態
+        has_pair = validation.get("has_pair", False)
+        pair_str = "あり" if has_pair else "なし"
+
+        # 一致状況
+        status = validation.get("status", "-")
+
+        columns = [
+            filename,
+            file_type,
+            path_str,
+            project_name,
+            date_val,
+            reviewer_val,
+            approver_val,
+            stamp_str,
+            pair_str,
+            status
+        ]
+
+        return "\t".join(columns)
+
+    def _generate_summary(self, validation_results: List[Dict[str, Any]]) -> List[str]:
+        """サマリを生成
+
+        Args:
+            validation_results: 検証結果のリスト
+
+        Returns:
+            サマリ行のリスト
+        """
+        total_pairs = len(validation_results)
+        complete_pairs = 0
+        checklist_only = 0
+        record_only = 0
+        no_stamp = 0
+
+        for result in validation_results:
+            validation = result["validation"]
+            checklist = result["checklist"]
+            record = result["record"]
+
+            if validation.get("has_pair"):
+                complete_pairs += 1
+            elif checklist and not record:
+                checklist_only += 1
+            elif record and not checklist:
+                record_only += 1
+
+            if validation.get("has_stamp") is False:
+                no_stamp += 1
+
+        summary = [
+            f"- プロジェクト総数: {total_pairs}件",
+            f"- 完全なペア: {complete_pairs}件",
+            f"- チェックリストのみ: {checklist_only}件",
+            f"- 記録表のみ: {record_only}件",
+            f"- 捺印なし: {no_stamp}件"
+        ]
+
+        return summary
 
     def _save_results(self, content: str):
         """結果をファイルに保存

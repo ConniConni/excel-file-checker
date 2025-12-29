@@ -115,3 +115,26 @@ class TestConfigLoader:
         # マッチしないファイル名でテスト
         file_type = loader.get_file_type_config("other_file.xlsx")
         assert file_type is None
+
+    def test_cell_labelsが正しく読み込まれる(self):
+        """cell_labelsが正しく読み込まれることを確認"""
+        config_path = Path(__file__).parent / "fixtures" / "multi_file_type_config.ini"
+        loader = ConfigLoader(config_path)
+
+        # ファイルタイプ1のcell_labelsを確認
+        file_type_1 = loader.file_types[0]
+        assert "cell_labels" in file_type_1
+        assert file_type_1["cell_labels"] == [
+            "プロジェクト名", "日付", "担当者", "承認者",
+            "設計レビュー", "設計結果", "実装レビュー", "実装結果"
+        ]
+        # cell_labelsの数がtarget_cellsの数と一致することを確認
+        assert len(file_type_1["cell_labels"]) == len(file_type_1["target_cells"])
+
+        # ファイルタイプ2のcell_labelsを確認
+        file_type_2 = loader.file_types[1]
+        assert "cell_labels" in file_type_2
+        assert file_type_2["cell_labels"] == [
+            "プロジェクト名", "項目1", "項目2", "項目3", "承認日", "レビュアー", "備考"
+        ]
+        assert len(file_type_2["cell_labels"]) == len(file_type_2["target_cells"])
